@@ -1,0 +1,77 @@
+---
+title: "PEC 1"
+author: "Bruno Bel"
+date: "2025-03-31"
+output: html_document
+---
+
+# **1. Selección Dataset**
+
+Los datos seleccionados para la realización de está PEC 1, provienen del estudio *LC-MS Based Approaches to Investigate Metabolomic Differences in the Urine of Young Women after Drinking Cranberry Juice or Apple Juice* . Efectuado por Liu Haiyan en la Universidad de Florida.
+
+Las procianidinas son un tipo de flavonoides, específicamente proantocianidinas, que se encuentran en muchas frutas, semillas y cortezas de plantas. Son conocidas por sus propiedades antioxidantes y sus posibles beneficios para la salud cardiovascular, la inflamación y la función cognitiva.
+
+En este estudio se reclutaron 18 mujeres jóvenes (21-29 años) con un índice de masa corporal (IMC) normal (18.5-25). Se les proporcionó una lista de alimentos ricos en procianidinas (arándanos, manzanas, uvas, chocolate, etc.) y se les indicó evitarlos antes y durante el estudio.
+
+El estudio consistió en dos fases en las que las participantes consumieron zumo de arándano o zumo de manzana durante tres días, con un período intermedio de dos semanas entre ambas. Se tomaron muestras de sangre y orina en distintos momentos para evaluar los efectos metabólicos.
+
+**Objetivo del estudio:**
+Investigar los cambios metabólicos provocados por los concentrados de procianidinas en arándanos y manzanas mediante un enfoque metabolómico basado en LC-MS (cromatografía líquida acoplada a espectrometría de masas).
+
+**Archivos del Dataset**
+Del repositorio podemos obtener disintos archivos en crudo para trabajar con ellos. En formato csv disponemos del archivo de metadata, donde se contiene la información de cada muestra y el grupo de estudio. El archivo de features donde se contiene los datos de los metabolitos analizados para las 45 muestras. Por último el fichero que relaciona cada metabolito con su nombre original y el ID de dos bases de dato bioquímicas.
+
+# **2. Creación de SummarizedExperminet / ExpressiónSet**
+
+En primer lugar importamos los documentos del dataset de interés.
+
+
+```{r}
+features <- read.csv2("features.csv")
+
+metaboliteNames <- read.csv2("metaboliteNames.csv")
+
+metadata <- read.csv2("metadata.csv")
+
+imported_files <- list(features = features, metaboliteNames = metaboliteNames, metadata = metadata)
+
+
+for (name in names(imported_files)) {
+  cat("Primeras observaciones del archivo:", name, "\n") 
+  print(head(imported_files[[name]])) 
+  cat("\n")  
+}
+
+```
+
+Instalación de Bioconductor
+
+```{r}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install(version = "3.20")
+
+BiocManager::install("SummarizedExperiment")
+
+library(Biobase)
+
+library(SummarizedExperiment)
+
+```
+
+En primer lugar debemos asegurar que las dimensiones de los objetos son comatibles y los nombres de las variables del objeto features, que son las muestras codificadas, son identicos al nombre en el archivo de metadata.
+```{r}
+
+#transformamos a data.frame
+features <- data.frame(features)
+metadata <- data.frame(metadata, row.names = TRUE) #el nombre de la muestra es el nombre de la fila
+
+
+dim(features)
+dim(metadata)
+
+colnames(features) == rownames(metadata)
+
+
+```
+
