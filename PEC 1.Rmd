@@ -2,7 +2,15 @@
 title: "PEC 1"
 author: "Bruno Bel"
 date: "2025-03-31"
-output: html_document
+output:
+  pdf_document:
+    toc: true
+    toc_depth: '2'
+  html_document:
+    toc: true
+    toc_depth: 2
+    theme: cosmo
+    highlight: tango
 ---
 
 # **1. Selección Dataset**
@@ -15,10 +23,12 @@ En este estudio se reclutaron 18 mujeres jóvenes (21-29 años) con un índice d
 
 El estudio consistió en dos fases en las que las participantes consumieron zumo de arándano o zumo de manzana durante tres días, con un período intermedio de dos semanas entre ambas. Se tomaron muestras de sangre y orina en distintos momentos para evaluar los efectos metabólicos.
 
-**Objetivo del estudio:**
+## **Objetivo del estudio:**
+
 Investigar los cambios metabólicos provocados por los concentrados de procianidinas en arándanos y manzanas mediante un enfoque metabolómico basado en LC-MS (cromatografía líquida acoplada a espectrometría de masas).
 
-**Archivos del Dataset**
+## **Archivos del Dataset**
+
 Del repositorio podemos obtener disintos archivos en crudo para trabajar con ellos. En formato csv disponemos del archivo de metadata, donde se contiene la información de cada muestra y el grupo de estudio. El archivo de features donde se contiene los datos de los metabolitos analizados para las 45 muestras. Por último el fichero que relaciona cada metabolito con su nombre original y el ID de dos bases de dato bioquímicas.
 
 # **2. Creación de SummarizedExperminet / ExpressiónSet**
@@ -26,7 +36,7 @@ Del repositorio podemos obtener disintos archivos en crudo para trabajar con ell
 En primer lugar importamos los documentos del dataset de interés.
 
 
-```{r}
+```{r, echo=FALSE}
 features <- read.csv2("features.csv")
 
 metaboliteNames <- read.csv2("metaboliteNames.csv")
@@ -46,7 +56,7 @@ for (name in names(imported_files)) {
 
 Instalación de Bioconductor
 
-```{r}
+```{r, warning=FALSE, error=FALSE, echo=FALSE}
 if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
 BiocManager::install(version = "3.20")
@@ -60,18 +70,139 @@ library(SummarizedExperiment)
 ```
 
 En primer lugar debemos asegurar que las dimensiones de los objetos son comatibles y los nombres de las variables del objeto features, que son las muestras codificadas, son identicos al nombre en el archivo de metadata.
-```{r}
+
+```{r, echo=FALSE}
 
 #transformamos a data.frame
 features <- data.frame(features)
 metadata <- data.frame(metadata, row.names = TRUE) #el nombre de la muestra es el nombre de la fila
 
-
 dim(features)
 dim(metadata)
 
-colnames(features) == rownames(metadata)
+all(colnames(features) == rownames(metadata))
+
+```
+Luego bservamos que los nombres de las columnas de matriz de datos y las filas de metadata coinciden todas.
+
+```{r, echo=FALSE}
+codigos_metaboliteNames <- as.character(metaboliteNames[, 2])
+
+nombres_features <- rownames(features)
+
+faltantes <- setdiff(codigos_metaboliteNames, nombres_features)
+
+if(length(faltantes) == 0) {
+  cat("Todos los códigos de metaboliteNames se encuentran en features.\n")
+} else {
+  cat("Faltan los siguientes códigos en features:\n")
+  print(faltantes)
+}
+
 
 
 ```
+
+```{r, echo=FALSE}
+#ordenamos nombre metabolitos
+metaboliteNames_orden <- metaboliteNames[match(rownames(features), metaboliteNames[, 2]), ]
+rownames(metaboliteNames_orden) <- metaboliteNames_orden[, 2]
+
+all(rownames(features) == rownames(metaboliteNames_orden))
+```
+
+
+
+Una vez comprobado que los nombre coinciden  procedemos a crear el objeto SummarizedExperiment.
+
+
+```{r, echo=FALSE}
+
+se <- SummarizedExperiment(
+  assays = list(counts = as.matrix(features)),
+  colData = DataFrame(metadata),
+  rowData = DataFrame(metaboliteNames_orden)
+)
+
+```
+
+## **Diferencias entre las clases de objetos**
+
+Mientras que el objeto de clase ExpressionSet está centrado en la expressión génica y microarrays los objetos de clase SummarizedExperiments son más genericos. 
+
+SummarizedExperiment permite almacenar diversas matrices de datos independientemente del tipo de ómica de estudio. 
+
+Además SummarizedExperiment contiene el tipo de objeto como GRanges, rowRanges o rowData para añadir más información sobre datos genómicos.
+
+
+
+# **3. Análisis exploratorio**
+
+Observamos la información inicial del objeto creado. Así como las primeras observaciones del componente assay que coincide con el objeto features.
+
+```{r, echo=FALSE}
+print("Primera visualización del contenido del objeto SummarizedExperiment:")
+print(se)
+
+cat("\nClase del objeto de interés:", class(se), "\n\n")
+
+cat("Dimensiones del objeto SummarizedExperiment (número de metabolitos x número de muestras):\n")
+print(dim(se))
+cat("\n")
+
+cat("Primeras 6 filas de la matriz con las medidas de los metabólitos:\n")
+print(head(assay(se)))
+cat("\n")
+
+cat("Metadatos de los metabolitos (rowData):\n")
+print(rowData(se))
+cat("\n")
+
+cat("Metadatos de las muestras (colData):\n")
+print(colData(se))
+cat("\n")
+
+```
+
+
+Con este resumen exploratorio conocemos los datos de los que disponemos, comprobamos la correcta creación del objeto clase SummarizedExperiment y que está compuesto por las medidas de los metabolitos, los metadatos de cada muestra y el grupo al que pertenece, así como la clasificación o distintos nombres asociados a cada metabolito medido.
+
+Con esta información introductoria podriamos proceder a realizar el análisis de interés según estudio.
+
+## **Ejemplo de análisis **
+
+Supongamos que queremos comparar la cantidad de cierto metabolito entre los grupos experimentales (tipo de zumo y control) para ver si este experimenta cambios significativos.
+
+Definimos como metabolito de interés el códificado con ID 439541 
+
+
+```{r, echo=FALSE}
+metabolito_id <- "439541"
+
+print("El metabolito de interés es:")
+
+rowData(se)[metabolito_id, ]
+
+valores_metabolitos <- assay(se)[metabolito_id, ]
+
+grupo_experimental <- factor(colData(se)$Treatment)
+
+anova_result <- aov(valores_metabolitos ~ grupo_experimental)
+print(summary(anova_result))
+
+posthoc <- TukeyHSD(anova_result)
+
+print(posthoc)
+
+```
+Como ejemplo hemos podido comparar el nivel del metabolito con ID PubChem 439541 llamado 2-AminoAMP entre el estado Basal y después de tomar zumo de arandanos y manzana.
+
+Al realizar el test anova podemos afirmar que hay diferencias entre los grupos con un nivel de significación del 0.05 ya que se contrasta con el p-valor inferior de 0.02.
+
+Al realizar la prueba Post Hoc del test de Tukey vemos que la diferencia significativa se encuentra entre los grupos de árandanos y manzana. 
+
+Por lo que para este metabolito no podriamos afirmar que haya diferencia estadística entre el estado basal y después de tomar el zumo, pero si que hay diferencias según si es de árandanos o manzana.
+
+Claramente esto resultaría contrario, hay que matizar que el p-valor para el contraste de el estado basal y zumo de manzana es de 0.8 mientras que el basal y árandanos de una magnitud menos. En caso de cambiar el nivel de significación o hipoteticamente ampliar la n, podríamos encontrar diferencias entre las medidas Basal y Árandanos.
+
 
